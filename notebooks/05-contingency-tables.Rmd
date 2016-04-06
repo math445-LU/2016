@@ -1,0 +1,186 @@
+---
+title: "Contingency Tables"
+author: "Math 445, Spring 2016"
+output:
+  html_document: default
+  pdf_document:
+    fig_height: 3
+    fig_width: 5
+---
+
+## A Permutation test for independence of two variables
+
+### Motivating example
+
+```{r GSS load, echo=FALSE, message=FALSE}
+grass_df <- read.csv("data/gss14-marijuanaEdu.csv")
+```
+
+The General Social Survey (GSS) is a sociological survey used to collect data on demographic characteristics and attitudes of residents of the United States. In 2014, the survey collected responses from `r nrow(grass_df)` respondents. We will consider two questions from this survey:
+
+  * Do you think the use of marijuana should be made legal, or not?
+
+  * What is the highest degree that you have earned?
+  
+Using these data, we will explore whether one's opinion on the legalization of marijuana is *associated* with their political views.
+
+To begin, we'll consider a contingency table summarizing the breakdown of opinion by political views:
+
+```{r GSS 2 x 2 table, echo=FALSE, message=FALSE}
+library(dplyr)
+# Quick contingency table
+summary_tbl <- with(grass_df, table(degree, grass))
+
+library(reshape2)
+grass_melt <- na.omit(melt(grass_df))
+summary_tbl2 <- dcast(grass_melt, degree ~ grass, length, margins = TRUE)
+summary_tbl2$`% in favor` <- summary_tbl2$legal / summary_tbl2$`(all)`
+
+colnames(summary_tbl2) <- tolower(colnames(summary_tbl2))
+rownames(summary_tbl2) <- tolower(rownames(summary_tbl2))
+
+library(knitr)
+kable(summary_tbl2)
+```
+
+
+### Expected counts in R
+
+To calculate the expected counts for use in a hypothesis test we first need to create a basic contingency table:
+
+```{r observed counts}
+observed_tbl <- with(grass_df, table(degree, grass))
+```
+
+```{r echo=FALSE}
+kable(observed_tbl)
+```
+
+Then we use the function `outer` to take the outer product of the row and column totals vectors:
+
+```{r expected counts}
+expected_tbl <- outer(rowSums(observed_tbl), colSums(observed_tbl)) / sum(observed_tbl)
+```
+
+```{r echo=FALSE}
+kable(expected_tbl)
+```
+
+Finally, we can calculate our test statistic:
+
+```{r}
+sum((observed_tbl - expected_tbl)^2 / expected_tbl)
+```
+
+******
+
+### Algorithm
+
+Store the data in a table with one row per observation and one column per variable. 
+
+Calculate a test statistic for the original data. Normally large values of the test statistic suggest dependence. 
+
+**Repeat** 
+  
+  Randomly permute the rows in one of the columns. 
+    
+  Calculate the test statistic for the permuted data. 
+
+**Until** we have enough samples 
+
+Calculate the $p$-value as the fraction of times the random statistics exceed the original statistic. 
+
+Optionally, plot a histogram of the resampled statistic values.
+
+### Implementation in R
+
+We'll use the `chisq` function written by the authors. Notice that the input is a contingency table, which can be obtained using the `table` command.
+
+```{r chisq function}
+chisq <- function(obs) {
+  expected <- outer(rowSums(obs), colSums(obs)) / sum(obs)
+  RES <- sum((obs - expected)^2 / expected)
+  return(RES)
+}
+```
+
+Extract the columns of the data frame that correspond to the categories of interest (this simplifies checking for errors). We don't need to do this in our example, since we only have two columns in the `grass_df` data frame.
+
+
+We only want to permute the data corresponding to \emph{complete cases}, so we need to exclude all of the missing values (coded as `NA` in R). This is easily done *after* you have selected the two columns of interest using the `na.omit` function:
+
+```{r omit missing values}
+# Notice the NAs
+summary(grass_df)
+
+# Exclude the missing values
+grass_complete <- na.omit(grass_df)
+
+# Check that it worked
+summary(grass_complete)
+```
+
+
+Now we're ready to permute the data. Remember that in each step we need to:
+
+* Randomly permute the rows in one of the columns. 
+    
+* Calculate the test statistic for the permuted data. 
+
+
+```{r for loop}
+# make sure dplyr is loaded for the sample_n function
+N <- 10^4 - 1
+result <- numeric(N)
+grass2 <- grass_complete$grass
+degree2 <- grass_complete$degree
+for(i in 1:N) {
+  grass_permuted <- sample(grass2)
+  gss_tbl <- table(degree2, grass_permuted)
+  result[i] <- chisq(gss_tbl)
+}
+```
+
+Now that we have the reference distribution we can inspect it using a histogram
+```{r, warning=FALSE, message=FALSE}
+library(ggplot2)
+ggplot(data = data.frame(stats = result)) +
+  geom_histogram(mapping = aes(stats))
+```
+
+and calculate a p-value
+
+```{r}
+# Calculating the p-value
+(sum(result >= chisq(observed_tbl)) + 1) / (N + 1)
+```
+
+What does the $p$-value indicate?
+  
+  
+  
+
+******
+## Using the $\chi^2$ distribution
+
+Below is the histogram of the reference distribution from our permutation test with a $\chi^2_3$ density curve overlaid.
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+ggplot(data = data.frame(stats = result)) +
+  geom_histogram(mapping = aes(x = stats, y = ..density..)) + 
+  stat_function(fun = dchisq, colour = "orange", args = list(df = 3), size = .75)
+```
+
+It is easy to calculate a $p$-value from a $\chi^2_m$ distribution using the `pchisq` function (i.e., the CDF):
+
+```{r}
+1 - pchisq(24.85, df = 3)
+```
+
+
+R can easily perform all of the calculations required for this hypothesis test in one simple function:
+
+```{r}
+chisq.test(grass_df$degree, grass_df$grass)
+```
+
