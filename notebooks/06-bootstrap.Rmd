@@ -1,0 +1,94 @@
+---
+title: "Introduction to the Bootstrap"
+author: "Math 445, Spring 2016"
+output:
+  pdf_document:
+    fig_height: 3
+    fig_width: 5
+  html_document: default
+---
+
+```{r load packages, include=FALSE}
+library(ggplot2)
+```
+
+
+## One Sample Bootstrap
+
+### Motivating example
+
+The file `CommuteAtlanta.csv` contains consists of a random sample of 500 people living in Atlanta, and provides information on their commute. The data were obtained from the U.S. Census Bureau's American Housing Survey (AHS), which contains information about housing and living conditions for samples from certain metropolitan areas. This sample includes only individuals that worked somewhere outside of their home.
+
+```{r data load}
+commute <- read.csv("data/CommuteAtlanta.csv")
+str(commute)
+```
+
+Below is a histogram of the commute times:
+
+```{r}
+ggplot(data = commute) + 
+  geom_histogram(mapping = aes(x = Time), colour = "grey20", binwidth = 7.5)
+```
+
+Suppose that you are interested in moving to Atlanta and want to better understand the average commute time. It is easy to compute an average commute time from this sample, but what does this tell you about all commuters in Atlanta (i.e. the population)?
+
+```{r}
+# sample mean
+mean(commute$Time)
+
+# sample standard deviation
+sd(commute$Time)
+```
+
+**Target:** a plausible range of values for the average commute time of all commuters in Atlanta, GA.
+
+
+### Algorithm
+
+Given a sample of size $n$ from a population, 
+
+1. Draw a resample of size $n$ with replacement from the sample. Compute a statistic that describes the sample, such as the sample mean. 
+2. Repeat this resampling process many times, say 10,000. 
+3. Construct the bootstrap distribution of the statistic. Inspect its spread, bias, and shape.
+
+### Example implementation
+
+The below code snippet boostraps our sample of 500 commuters in Atlanta in an effort to better understand the average commute time.
+
+```{r bootstrap example}
+n <- nrow(commute)
+N <- 10^4
+time_mean <- numeric(N)
+for (i in 1:N) {
+  x <- sample(commute$Time, size = n, replace = TRUE)
+  time_mean[i] <- mean(x)
+}
+```
+
+#### Bootstrap distribution
+
+```{r bootstrap dsn, echo=FALSE, message=FALSE}
+ggplot(data = data.frame(xbar = time_mean)) + 
+  geom_histogram(mapping = aes(x = xbar), colour = "gray20") + 
+  geom_vline(xintercept = mean(commute$Time), colour = "orange", linetype = 2) + 
+  xlab(expression(bar(x)))
+```
+
+```{r numeric summaries of bootstrap dsn}
+# bootstrap mean
+mean(time_mean)                     
+
+# bias
+mean(time_mean) - mean(commute$Time)
+
+# standard error
+sd(time_mean)                     
+```
+
+#### Bootstrap percentile confidence intervals
+
+```{r percentile CIs}
+quantile(time_mean, probs = c(.025, .975))
+```
+
