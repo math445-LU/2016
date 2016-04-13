@@ -1,15 +1,20 @@
 ---
-title: "Introduction to the Bootstrap"
+title: "Bootstrap Confidence Intervals"
 author: "Math 445, Spring 2016"
 output:
+  html_document: default
   pdf_document:
     fig_height: 3
     fig_width: 5
-  html_document: default
 ---
 
 ```{r load packages, include=FALSE}
 library(ggplot2)
+library(knitr)
+opts_chunk$set(
+  tidy=FALSE,     # display code as typed
+  size="small"   # slightly smaller font for code
+  )
 ```
 
 
@@ -92,3 +97,164 @@ sd(time_mean)
 quantile(time_mean, probs = c(.025, .975))
 ```
 
+## Two Sample Bootstrap
+
+### Motivating example
+
+Are houses with fireplaces more expensive? The file `AmesHousing2010.csv` contains a random sample of houses sold in Ames, IA during 2010. The data set contains details of the sales and the property. Suppose that you are interested in estimating the difference in average price between houses with and without a fireplace. This is a situation where the **two sample bootstrap** can be used to construct a confidence interval.
+
+```{r load housing data}
+housing <- read.csv("data/AmesHousing2010.csv")
+```
+
+First, let's see what the data look like
+
+```{r message=FALSE}
+ggplot(data = housing) + 
+  geom_histogram(mapping = aes(x = SalePrice), colour = "gray20") + 
+  facet_wrap(~Fireplaces, ncol = 1)
+```
+
+Suppose further that you are only interested in houses with either no fireplace or one fireplace
+
+```{r message=FALSE}
+library(dplyr)
+sub_housing <- filter(housing, Fireplaces <= 1)
+
+# Quick summary stats
+price_stats <- 
+  sub_housing %>%
+  group_by(Fireplaces) %>%
+  summarise(min = min(SalePrice),
+            Q1 = quantile(SalePrice, .25),
+            median = median(SalePrice),
+            Q3 = quantile(SalePrice, .75),
+            max = max(SalePrice),
+            mean = mean(SalePrice),
+            sd = sd(SalePrice),
+            n = n())
+price_stats
+```
+
+So we see that our **point estimate** is 
+
+```{r}
+obs_diff_means <- price_stats$mean[2] - price_stats$mean[1]
+obs_diff_means
+```
+
+### Algorithm
+
+Given independent samples of sizes m and n from two populations, 
+
+1. Draw a resample of size m with replacement from the first sample and a separate resample of size n from the second sample. Compute a statistic that compares the two groups, such as the difference between the two sample means. 
+2. Repeat this resampling process many times, say 10,000. 
+3. Construct the bootstrap distribution of the statistic. Inspect its spread, bias, and shape.
+
+
+### Example implementation
+
+The below code snippet performs the two sample bootstrap in order to construct a confidence interval for the difference in average sales price of homes in Ames, IA with and without fireplaces.
+
+Since we have many extra columsn in our data set, it's easier to first select only the two columns of interest.
+
+```{r}
+boot_df <- select(sub_housing, SalePrice, Fireplaces)
+```
+
+
+```{r 2 sample  bootstrap example}
+N <- 10^4
+
+no_fp <- subset(boot_df, select = SalePrice, subset = Fireplaces == 0, drop = TRUE)
+fp <- subset(boot_df, select = SalePrice, subset = Fireplaces == 1, drop = TRUE)
+
+price_diff_mean <- numeric(N)
+for (i in 1:N) {
+  no_fp_sample <- sample(no_fp, replace = TRUE)
+  fp_sample <- sample(fp, replace = TRUE)
+  price_diff_mean[i] <- mean(fp_sample) - mean(no_fp_sample)
+}
+```
+
+
+#### Bootstrap distribution
+
+```{r 2 sample bootstrap dsn, echo=FALSE, message=FALSE}
+ggplot(data = data.frame(avg.diff = price_diff_mean)) + 
+  geom_histogram(mapping = aes(x = avg.diff), colour = "gray20") + 
+  geom_vline(xintercept = obs_diff_means, colour = "orange", linetype = 2) + 
+  xlab(expression(bar(x)[yes] - bar(x)[no]))
+```
+
+```{r numeric summaries of 2 samp bootstrap dsn}
+# bootstrap mean
+mean(price_diff_mean)                     
+
+# bias
+mean(price_diff_mean) - obs_diff_means
+
+# standard error
+sd(price_diff_mean)  
+
+# bias/se
+(mean(price_diff_mean) - obs_diff_means) / sd(price_diff_mean)  
+```
+
+#### Bootstrap percentile confidence intervals
+
+```{r 2 samplepercentile CIs}
+quantile(price_diff_mean, probs = c(.05, .95))
+```
+
+
+### Other statistics
+
+Instead of focusing on the difference in means, we could instead focus on the ratio of means.
+
+#### Implementation
+
+```{r ratio  bootstrap example}
+N <- 10^4
+
+no_fp <- subset(boot_df, select = SalePrice, subset = Fireplaces == 0, drop = TRUE)
+fp <- subset(boot_df, select = SalePrice, subset = Fireplaces == 1, drop = TRUE)
+
+price_ratio_mean <- numeric(N)
+for (i in 1:N) {
+  no_fp_sample <- sample(no_fp, replace = TRUE)
+  fp_sample <- sample(fp, replace = TRUE)
+  price_ratio_mean[i] <- mean(fp_sample) / mean(no_fp_sample)
+}
+```
+
+#### Bootstrap distribution
+
+```{r ratio bootstrap dsn, echo=FALSE, message=FALSE}
+obs_ratio_mean <- price_stats$mean[2] / price_stats$mean[1]
+
+ggplot(data = data.frame(ratio = price_ratio_mean)) + 
+  geom_histogram(mapping = aes(x = ratio), colour = "gray20") + 
+  geom_vline(xintercept = obs_ratio_mean, colour = "orange", linetype = 2) + 
+  xlab(expression(bar(x)[yes] / bar(x)[no]))
+```
+
+```{r numeric summaries of ratio bootstrap dsn}
+# bootstrap mean
+mean(obs_ratio_mean)                     
+
+# bias
+mean(price_ratio_mean) - obs_ratio_mean
+
+# standard error
+sd(price_ratio_mean)                     
+
+# bias/se
+(mean(price_ratio_mean) - obs_ratio_mean) / sd(price_ratio_mean) 
+```
+
+#### Bootstrap percentile confidence intervals
+
+```{r ratio percentile CIs}
+quantile(obs_ratio_mean, probs = c(.05, .95))
+```
