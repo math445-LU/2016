@@ -14,8 +14,8 @@ flights <- read.csv("https://raw.githubusercontent.com/math445-LU/2016/master/da
 
 ## ----cache=TRUE----------------------------------------------------------
 # Grab the delays from each airline
-aa_delay <- subset(flights, select = Delay, subset = Carrier=="UA", drop = T)
-ua_delay <- subset(flights, select = Delay, subset = Carrier=="AA", drop = T)
+ua_delay <- subset(flights, select = Delay, subset = Carrier=="UA", drop = T)
+aa_delay <- subset(flights, select = Delay, subset = Carrier=="AA", drop = T)
 
 # Calculating the observed proportion for AA
 mean(aa_delay > 20)
@@ -51,7 +51,7 @@ ggplot(data = data.frame(result)) +
   ggtitle("Delay times > 20 minutes")
 
 ## ------------------------------------------------------------------------
-2 * (sum(result >= observed) + 1) / (N + 1)
+2 * (sum(result <= observed) + 1) / (N + 1) # <= b/c of I did AA - UA
 
 ## ----cache=TRUE----------------------------------------------------------
 # Calculating the observed statistic
@@ -73,7 +73,7 @@ for(i in 1:N) {
 # Plot the permutation distribution
 ggplot(data = data.frame(resultb)) + 
   geom_histogram(mapping = aes(x = resultb), colour = "gray20") + 
-  geom_vline(xintercept = observed, colour = "orange") +
+  geom_vline(xintercept = observedb, colour = "orange") +
   xlab("Ratio of variances") + 
   ggtitle("Variance of delay times")
 
