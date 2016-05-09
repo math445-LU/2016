@@ -1,0 +1,136 @@
+---
+title: "t-Based Confidence Intervals"
+author: "Math 445, Spring 2016"
+output:
+  pdf_document:
+    fig_height: 3
+    fig_width: 5
+  html_document: default
+---
+
+```{r load packages, include=FALSE}
+library(ggplot2)
+library(knitr)
+opts_chunk$set(
+  tidy=FALSE,     # display code as typed
+  size="small"   # slightly smaller font for code
+  )
+```
+
+
+## One Sample t-based Intervals
+
+### Example
+
+The data set `MnGroundwater.csv` contains measurements on the water quality of 895 randomly selected wells in Minnesota. We need to construct a 95% confidence interval for the mean alkalinity level.
+
+```{r}
+gwdata <- read.csv("../data/MnGroundwater.csv")
+```
+
+Let's begin by plotting the data:
+
+```{r, eval=FALSE}
+ggplot(data = gwdata) + 
+  geom_histogram(mapping = aes(x = Alkalinity), colour = "gray20")
+
+ggplot(data = gwdata) + 
+  stat_qq(mapping = aes(sample = Alkalinity))
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+p1 <- ggplot(data = gwdata) + 
+  geom_histogram(mapping = aes(x = Alkalinity), colour = "gray20")
+
+p2 <- ggplot(data = gwdata) + 
+  stat_qq(mapping = aes(sample = Alkalinity))
+
+library(gridExtra)
+grid.arrange(p1, p2, ncol = 2)
+```
+
+What do these plot reveal about the assumptions required for the t-based confidence interval?
+
+What about the other necessary assumptions?
+
+#### Two-sided confidence intervals
+
+Assuming that all of the assumption are upheld, we can build a t-based confidence in R using the `t.test` function. To see the help file, run the command `?t.test`.
+
+```{r}
+t.test(gwdata$Alkalinity, conf.level = 0.95)
+```
+
+Notice that this function does more than you asked for---it conducts a hypothesis test as well! Since `t.test` returns a list, you can easily extract only the element of interest
+
+```{r}
+t.test(gwdata$Alkalinity, conf.level = 0.95)$conf.int
+```
+
+How do we interpret this interval?
+
+
+#### One-sided confidence intervals
+
+There may be situations where you are only interested in an upper or lower bound. In these situations we can easily adapt the two-sided t interval in R using the `alternative` argument:
+
+```{r}
+t.test(gwdata$Alkalinity, conf.level = 0.95, alternative = "less")$conf.int
+
+t.test(gwdata$Alkalinity, conf.level = 0.95, alternative = "greater")$conf.int
+```
+
+
+## Two Sample t-based Intervals
+
+### Example
+
+The birth weight of a baby is of interest to health officials since many studies have shown possible links between this weight and conditions in later life, such as obesity or diabetes. Researchers look for possible relationships between the weight of a baby and the age of the mother, or whether or not she smoked cigarettes or drank alcohol during her pregnancy. We will investigate data consisting of a random sample of 1009 babies born in North Carolina during 2004.
+
+```{r}
+ncbirths04 <- read.csv("../data/NCBirths2004.csv")
+```
+
+Let's begin by plotting the data:
+
+```{r}
+ggplot(data = ncbirths04) + 
+  geom_density(mapping = aes(x = Weight, fill = Smoker), alpha = 0.5) + 
+  scale_fill_brewer(palette = "Dark2")
+```
+
+```{r}
+ggplot(data = ncbirths04) + 
+  stat_qq(mapping = aes(sample = Weight)) + 
+  facet_wrap(~Smoker, ncol = 2)
+```
+
+What do these plot reveal about the assumptions necessary for t-based inference?
+
+#### Welch's t procedure
+
+Assuming that all of the assumption are upheld, we can again build a t-based confidence in R using the `t.test` function. First, let's assume that the variances are not equal; thus, we need to use Welch's t procedure and the Welch-Satterthwaite degrees of freedom.
+
+`t.test` requires a vectors for each group when conducting the two-sample t procedures, so we must first create these vectors via subsetting:
+```{r}
+s_weight  <- subset(ncbirths04, select = Weight, subset = Smoker == "Yes", drop = TRUE)
+ns_weight <- subset(ncbirths04, select = Weight, subset = Smoker == "No", drop = TRUE)
+```
+
+Now we can use the `t.test` function.
+
+```{r}
+t.test(ns_weight, s_weight, conf.level = 0.95)
+```
+
+How do we interpret this interval?
+
+#### Pooled t procedure
+
+If there is reasonable evidence that the variances between the two groups are equal, then we should use the pooled sample variance with the t procedure. To do this, add the argument `var.equal = TRUE` to `t.test`.
+
+```{r}
+t.test(ns_weight, s_weight, conf.level = 0.95, var.equal = TRUE)
+```
+
+How does this interval differ from the interval obtained using Welch's t procedure.
